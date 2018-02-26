@@ -25,6 +25,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 
 import static lkolisko.hyperledger.example.HFJavaSDKBasicExample.*;
 
@@ -121,6 +122,8 @@ public class HFJavaSDKChainCodeInvocationExample {
         BlockEvent.TransactionEvent event = sendTransaction(client, channel).get(60, TimeUnit.SECONDS);
         if (event.isValid()) {
             log.info("Transacion tx: " + event.getTransactionID() + " is completed.");
+        } else {
+            log.error("Transaction tx: " + event.getTransactionID() + " is invalid.");
         }
 
     }
@@ -132,12 +135,14 @@ public class HFJavaSDKChainCodeInvocationExample {
         tpr.setChaincodeID(cid);
         tpr.setFcn("createCar");
         tpr.setArgs(new String[]{"CAR11", "Skoda", "MB1000", "Yellow", "Lukas"});
-        Collection<ProposalResponse> resp = channel.sendTransactionProposal(tpr);
-        Set<ProposalResponse> invalid = new HashSet<>();
-        Collection<Set<ProposalResponse>> sets = SDKUtils.getProposalConsistencySets(resp);
-        if (sets.size() > 1) {
-            throw new RuntimeException("invalid response: " + invalid.iterator().next());
+        Collection<ProposalResponse> responses = channel.sendTransactionProposal(tpr);
+        List<ProposalResponse> invalid = responses.stream().filter(r -> r.isInvalid()).collect(Collectors.toList());
+        if (!invalid.isEmpty()) {
+            invalid.forEach(response -> {
+                log.error(response.getMessage());
+            });
+            throw new RuntimeException("invalid response(s) found");
         }
-        return channel.sendTransaction(resp);
+        return channel.sendTransaction(responses);
     }
 }
